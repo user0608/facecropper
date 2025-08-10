@@ -1,0 +1,57 @@
+package main
+
+import (
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"slices"
+
+	"github.com/gabriel-vasile/mimetype"
+	"github.com/labstack/echo/v4"
+	"github.com/user0608/facecropper"
+)
+
+var acceptedTypes = []string{"image/png", "image/jpeg"}
+
+func NewFaceCropHandle() echo.HandlerFunc {
+	return func(c echo.Context) error {
+		content, err := io.ReadAll(c.Request().Body)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return c.JSON(http.StatusBadRequest, echo.Map{"message": "el cuerpo de la solicitud está vacío"})
+			}
+			if errors.Is(err, io.ErrUnexpectedEOF) {
+				return c.JSON(http.StatusBadRequest, echo.Map{"message": "el cuerpo de la solicitud está incompleto"})
+			}
+			return c.JSON(http.StatusInternalServerError, echo.Map{"message": "error al leer el cuerpo de la solicitud"})
+		}
+		mine := mimetype.Detect(content)
+		if !slices.Contains(acceptedTypes, mine.String()) {
+			return c.JSON(http.StatusInternalServerError, echo.Map{"message": "tipo invalido"})
+		}
+		fc, err := facecropper.New(
+			"opencv_models/face_detection_yunet_2023mar.onnx",
+			&facecropper.Options{
+				ScoreThreshold: 0.7,
+				NMSThreshold:   0.3,
+				TopK:           5000,
+				OutputWidth:    480,
+				OutputHeight:   600,
+				MarginScaleW:   1.6,
+				MarginScaleH:   2.0,
+				AlignByEyes:    false,
+			})
+		if err != nil {
+			slog.Error("crating facecopper", "error", err)
+			return c.JSON(http.StatusInternalServerError, echo.Map{"message": "errlr"})
+		}
+		defer fc.Close()
+		resultBytes, err := fc.Process(c.Request().Context(), content)
+		if err != nil {
+			slog.Error("proccessing imange", "error", err)
+			return c.JSON(http.StatusInternalServerError, echo.Map{"message": "errlr"})
+		}
+		return c.Blob(http.StatusOK, mimetype.Detect(resultBytes).String(), resultBytes)
+	}
+}
