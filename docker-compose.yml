@@ -1,0 +1,5 @@
+services:
+  facecropper:
+    image: kevinsaucedo/face_cropper:0.0.1
+    ports:
+      - 1323:1323
