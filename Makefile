@@ -17,4 +17,7 @@ clean:
 	@rm -rf build
 
 image:
-	@docker build --network host -t face_cropper:$(version) .
+	@docker build --network host -t kevinsaucedo/face_cropper:$(version) .
+
+push:
+	@docker push kevinsaucedo/face_cropper:$(version)
