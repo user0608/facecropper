@@ -43,14 +43,15 @@ func NewFaceCropHandle() echo.HandlerFunc {
 				AlignByEyes:    false,
 			})
 		if err != nil {
-			slog.Error("crating facecopper", "error", err)
-			return c.JSON(http.StatusInternalServerError, echo.Map{"message": "errlr"})
+			slog.Error("creating facecopper", "error", err)
+			return c.JSON(http.StatusInternalServerError, echo.Map{"message": "error creating facecopper"})
 		}
 		defer fc.Close()
+
 		resultBytes, err := fc.Process(c.Request().Context(), content)
 		if err != nil {
-			slog.Error("proccessing imange", "error", err)
-			return c.JSON(http.StatusInternalServerError, echo.Map{"message": "errlr"})
+			slog.Error("processing image", "error", err)
+			return c.JSON(http.StatusInternalServerError, echo.Map{"message": "error processing image"})
 		}
 		return c.Blob(http.StatusOK, mimetype.Detect(resultBytes).String(), resultBytes)
 	}
