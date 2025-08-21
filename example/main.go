@@ -3,48 +3,64 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"os"
-	"time"
+	"path"
+	"path/filepath"
 
 	"log/slog"
 
 	"github.com/user0608/facecropper"
 )
 
-func main() {
+const inputDir = "input"
+const outputDir = "output"
 
-	model := "face_detection_yunet_2023mar.onnx"
-	c, err := facecropper.New(model, &facecropper.Options{
-		ScoreThreshold: 0.7,
+func main() {
+	model := "../opencv_models/haarcascade_frontalface_default.xml"
+	cropper, err := facecropper.New(model, &facecropper.Options{
+		ScoreThreshold: 0.5,
 		NMSThreshold:   0.3,
 		TopK:           5000,
-		OutputWidth:    480,
-		OutputHeight:   600,
-		MarginScaleW:   1.6,
-		MarginScaleH:   2.0,
-		AlignByEyes:    false,
+		OutputWidth:    354,
+		OutputHeight:   472,
+		PaddingPct:     0.18,
 	})
 	if err != nil {
 		slog.Error("init", "err", err)
 		return
 	}
-	defer c.Close()
+	defer cropper.Close()
+	entries, err := os.ReadDir(inputDir)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if len(entries) > 0 {
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			log.Fatalln(err)
+		}
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		imageBytes, err := os.ReadFile(path.Join(inputDir, entry.Name()))
+		if err != nil {
+			slog.Error("reading input", "error", err)
+			continue
+		}
+		output, err := cropper.Process(context.Background(), imageBytes)
+		if err != nil {
+			slog.Error("response", "error", err)
+		}
+		if len(output) == 0 {
+			slog.Info("empty response", "input", entry.Name())
+			continue
+		}
+		outpath := filepath.Join(outputDir, entry.Name())
+		if err := os.WriteFile(outpath, output, 0755); err != nil {
+			log.Fatalln(err)
+		}
 
-	in, err := os.ReadFile("input.jpg")
-	if err != nil {
-		slog.Error("leer input", "err", err)
-		return
-	}
-	start := time.Now()
-	out, err := c.Process(context.Background(), in)
-	if err != nil {
-		slog.Error("procesar", "err", err)
-		return
-	}
-	fmt.Println("duration (s):", time.Since(start).Seconds())
-	if err := os.WriteFile("output_face.jpg", out, 0o644); err != nil {
-		slog.Error("guardar out", "err", err)
-		return
 	}
 }

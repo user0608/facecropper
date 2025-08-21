@@ -31,16 +31,14 @@ func NewFaceCropHandle() echo.HandlerFunc {
 			return c.JSON(http.StatusInternalServerError, echo.Map{"message": "tipo invalido"})
 		}
 		fc, err := facecropper.New(
-			"opencv_models/face_detection_yunet_2023mar.onnx",
+			"opencv_models/haarcascade_frontalface_default.xml",
 			&facecropper.Options{
-				ScoreThreshold: 0.7,
+				ScoreThreshold: 0.5,
 				NMSThreshold:   0.3,
 				TopK:           5000,
-				OutputWidth:    480,
-				OutputHeight:   600,
-				MarginScaleW:   1.6,
-				MarginScaleH:   2.0,
-				AlignByEyes:    false,
+				OutputWidth:    354,
+				OutputHeight:   472,
+				PaddingPct:     0.18,
 			})
 		if err != nil {
 			slog.Error("creating facecopper", "error", err)
