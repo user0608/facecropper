@@ -2,12 +2,12 @@ package facecropper
 
 import (
 	"context"
-	"errors"
 	"image"
 	"log/slog"
 	"math"
 	"sync"
 
+	"github.com/user0608/goones/errs"
 	"gocv.io/x/gocv"
 )
 
@@ -39,8 +39,8 @@ type Cropper struct {
 
 func New(modelPath string, opts *Options) (*Cropper, error) {
 	if modelPath == "" {
-		slog.Error("ruta de modelo vacía")
-		return nil, errors.New("modelo requerido")
+		slog.Error("ruta de modelo vacía", "path", modelPath)
+		return nil, errs.InternalErrorDirect("modelo de reconocimiento facial no disponible")
 	}
 	if opts == nil {
 		def := DefaultOptions()
@@ -49,7 +49,7 @@ func New(modelPath string, opts *Options) (*Cropper, error) {
 	cls := gocv.NewCascadeClassifier()
 	if !cls.Load(modelPath) {
 		slog.Error("no se pudo cargar haarcascade", "path", modelPath)
-		return nil, errors.New("carga de haarcascade falló")
+		return nil, errs.InternalErrorDirect("falló la carga del modelo para reconocimiento facial")
 	}
 	return &Cropper{opts: *opts, cls: cls}, nil
 }
@@ -72,20 +72,20 @@ func clamp(v, lo, hi int) int {
 
 func (c *Cropper) Process(ctx context.Context, imgBytes []byte) ([]byte, error) {
 	if len(imgBytes) == 0 {
-		return nil, errors.New("imagen vacía")
+		return nil, errs.BadRequestDirect("la foto está vacía o no puede ser procesada")
 	}
 	img, err := gocv.IMDecode(imgBytes, gocv.IMReadColor)
 	if err != nil {
 		return nil, err
 	}
 	if img.Empty() {
-		return nil, errors.New("decode vacío")
+		return nil, errs.BadRequestDirect("la imagen no pudo ser decodificada o está vacía")
 	}
 	defer img.Close()
 
 	W, H := img.Cols(), img.Rows()
 	if W == 0 || H == 0 {
-		return nil, errors.New("dimensiones inválidas")
+		return nil, errs.BadRequestDirect("la imagen no pudo ser decodificada o tiene dimensiones inválidas")
 	}
 
 	gray := gocv.NewMat()
@@ -96,7 +96,7 @@ func (c *Cropper) Process(ctx context.Context, imgBytes []byte) ([]byte, error) 
 	rects := c.cls.DetectMultiScale(gray)
 	c.mu.Unlock()
 	if len(rects) == 0 {
-		return nil, errors.New("sin rostro")
+		return nil, errs.BadRequestDirect("no se detectó ningún rostro en la imagen")
 	}
 
 	best := rects[0]
@@ -165,9 +165,8 @@ func (c *Cropper) Process(ctx context.Context, imgBytes []byte) ([]byte, error) 
 	x2 = clamp(x2, 0, W)
 	y2 = clamp(y2, 0, H)
 	if x2-x1 <= 1 || y2-y1 <= 1 {
-		return nil, errors.New("recorte inválido")
+		return nil, errs.InternalErrorDirect("recorte inválido: coordenadas del rostro con dimensiones insuficientes")
 	}
-
 	roi := img.Region(image.Rect(x1, y1, x2, y2))
 	defer roi.Close()
 
